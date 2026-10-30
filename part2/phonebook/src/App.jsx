@@ -1,22 +1,25 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import axios from 'axios'
 
 import Filter from './components/Filter'
 import PersonForm from './components/PersonForm'
 import Persons from './components/Persons'
 
 const App = () => {
-  // Dummy data to test the app without typing everything by hand
-  const [persons, setPersons] = useState([
-    { name: 'Arto Hellas', number: '040-123456', id: 1 },
-    { name: 'Ada Lovelace', number: '39-44-5323523', id: 2 },
-    { name: 'Dan Abramov', number: '12-43-234345', id: 3 },
-    { name: 'Mary Poppendieck', number: '39-23-6423122', id: 4 }
-  ])
+  // The list starts empty: the data will come from the server
+  const [persons, setPersons] = useState([])
 
   // One state for each input field
   const [newName, setNewName] = useState('')
   const [newNumber, setNewNumber] = useState('')
   const [filter, setFilter] = useState('')
+
+  // Effect hook: runs after the first render, fetches the data from json-server
+  useEffect(() => {
+    axios.get('http://localhost:3001/persons').then((response) => {
+      setPersons(response.data)
+    })
+  }, []) // the empty array means: run only once
 
   // Event handlers: they update the state when the user types
   const handleNameChange = (event) => {
@@ -35,7 +38,7 @@ const App = () => {
   const addPerson = (event) => {
     event.preventDefault() // stop the page from reloading
 
-    // 2.7: check if the name already exists
+    // Check if the name already exists
     const alreadyExists = persons.some((person) => person.name === newName)
 
     if (alreadyExists) {
@@ -54,8 +57,7 @@ const App = () => {
     setNewNumber('')
   }
 
-  // 2.9: keep only the people whose name contains the filter text
-  // (toLowerCase makes the search case insensitive)
+  // Keep only the people whose name contains the filter text
   const personsToShow = persons.filter((person) =>
     person.name.toLowerCase().includes(filter.toLowerCase())
   )
