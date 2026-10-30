@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
 
 import Filter from './components/Filter'
 import PersonForm from './components/PersonForm'
 import Persons from './components/Persons'
+import personService from './services/persons'
 
 const App = () => {
-  // The list starts empty: the data will come from the server
   const [persons, setPersons] = useState([])
 
   // One state for each input field
@@ -14,12 +13,12 @@ const App = () => {
   const [newNumber, setNewNumber] = useState('')
   const [filter, setFilter] = useState('')
 
-  // Effect hook: runs after the first render, fetches the data from json-server
+  // Fetch the initial data from the server (runs only once)
   useEffect(() => {
-    axios.get('http://localhost:3001/persons').then((response) => {
-      setPersons(response.data)
+    personService.getAll().then((initialPersons) => {
+      setPersons(initialPersons)
     })
-  }, []) // the empty array means: run only once
+  }, [])
 
   // Event handlers: they update the state when the user types
   const handleNameChange = (event) => {
@@ -38,23 +37,65 @@ const App = () => {
   const addPerson = (event) => {
     event.preventDefault() // stop the page from reloading
 
-    // Check if the name already exists
-    const alreadyExists = persons.some((person) => person.name === newName)
+    const existingPerson = persons.find((person) => person.name === newName)
 
-    if (alreadyExists) {
-      alert(`${newName} is already added to phonebook`)
+    // 2.15: the name already exists, so offer to replace the number
+    if (existingPerson) {
+      const confirmed = window.confirm(
+        `${newName} is already added to phonebook, replace the old number with a new one?`
+      )
+
+      if (confirmed) {
+        const updatedPerson = { ...existingPerson, number: newNumber }
+
+        personService
+          .update(existingPerson.id, updatedPerson)
+          .then((returnedPerson) => {
+            setPersons(
+              persons.map((person) =>
+                person.id !== existingPerson.id ? person : returnedPerson
+              )
+            )
+            setNewName('')
+            setNewNumber('')
+          })
+          .catch(() => {
+            // The person was already deleted from the server
+            alert(`${existingPerson.name} was already removed from the server`)
+            setPersons(persons.filter((p) => p.id !== existingPerson.id))
+          })
+      }
       return
     }
 
+    // 2.12: new person, save it on the server
+    // (no id here: json-server creates one for us)
     const personObject = {
       name: newName,
-      number: newNumber,
-      id: persons.length + 1
+      number: newNumber
     }
 
-    setPersons(persons.concat(personObject))
-    setNewName('') // clear the input fields
-    setNewNumber('')
+    personService.create(personObject).then((returnedPerson) => {
+      setPersons(persons.concat(returnedPerson))
+      setNewName('') // clear the input fields
+      setNewNumber('')
+    })
+  }
+
+  // 2.14: delete a person after asking for confirmation
+  const deletePerson = (person) => {
+    if (window.confirm(`Delete ${person.name} ?`)) {
+      personService
+        .remove(person.id)
+        .then(() => {
+          setPersons(persons.filter((p) => p.id !== person.id))
+        })
+        .catch(() => {
+          // The person was already deleted from the server
+          alert(`${person.name} was already removed from the server`)
+          setPersons(persons.filter((p) => p.id !== person.id))
+        })
+    }
   }
 
   // Keep only the people whose name contains the filter text
@@ -80,7 +121,7 @@ const App = () => {
 
       <h3>Numbers</h3>
 
-      <Persons persons={personsToShow} />
+      <Persons persons={personsToShow} handleDelete={deletePerson} />
     </div>
   )
 }
