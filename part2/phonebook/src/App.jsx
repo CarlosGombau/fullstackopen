@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Filter from './components/Filter'
 import PersonForm from './components/PersonForm'
 import Persons from './components/Persons'
+import Notification from './components/Notification'
 import personService from './services/persons'
 
 const App = () => {
@@ -13,12 +14,23 @@ const App = () => {
   const [newNumber, setNewNumber] = useState('')
   const [filter, setFilter] = useState('')
 
+  // null = no message, otherwise { text: '...', type: 'success' or 'error' }
+  const [notification, setNotification] = useState(null)
+
   // Fetch the initial data from the server (runs only once)
   useEffect(() => {
     personService.getAll().then((initialPersons) => {
       setPersons(initialPersons)
     })
   }, [])
+
+  // Shows a message for 5 seconds and then hides it
+  const showNotification = (text, type) => {
+    setNotification({ text, type })
+    setTimeout(() => {
+      setNotification(null)
+    }, 5000)
+  }
 
   // Event handlers: they update the state when the user types
   const handleNameChange = (event) => {
@@ -39,7 +51,7 @@ const App = () => {
 
     const existingPerson = persons.find((person) => person.name === newName)
 
-    // 2.15: the name already exists, so offer to replace the number
+    // The name already exists: offer to replace the number
     if (existingPerson) {
       const confirmed = window.confirm(
         `${newName} is already added to phonebook, replace the old number with a new one?`
@@ -58,18 +70,21 @@ const App = () => {
             )
             setNewName('')
             setNewNumber('')
+            showNotification(`Changed the number of ${returnedPerson.name}`, 'success')
           })
           .catch(() => {
-            // The person was already deleted from the server
-            alert(`${existingPerson.name} was already removed from the server`)
+            // 2.17: the person was already deleted from the server
+            showNotification(
+              `Information of ${existingPerson.name} has already been removed from server`,
+              'error'
+            )
             setPersons(persons.filter((p) => p.id !== existingPerson.id))
           })
       }
       return
     }
 
-    // 2.12: new person, save it on the server
-    // (no id here: json-server creates one for us)
+    // New person: save it on the server
     const personObject = {
       name: newName,
       number: newNumber
@@ -79,20 +94,25 @@ const App = () => {
       setPersons(persons.concat(returnedPerson))
       setNewName('') // clear the input fields
       setNewNumber('')
+      showNotification(`Added ${returnedPerson.name}`, 'success')
     })
   }
 
-  // 2.14: delete a person after asking for confirmation
+  // Delete a person after asking for confirmation
   const deletePerson = (person) => {
     if (window.confirm(`Delete ${person.name} ?`)) {
       personService
         .remove(person.id)
         .then(() => {
           setPersons(persons.filter((p) => p.id !== person.id))
+          showNotification(`Deleted ${person.name}`, 'success')
         })
         .catch(() => {
           // The person was already deleted from the server
-          alert(`${person.name} was already removed from the server`)
+          showNotification(
+            `Information of ${person.name} has already been removed from server`,
+            'error'
+          )
           setPersons(persons.filter((p) => p.id !== person.id))
         })
     }
@@ -106,6 +126,8 @@ const App = () => {
   return (
     <div>
       <h2>Phonebook</h2>
+
+      <Notification notification={notification} />
 
       <Filter filter={filter} handleFilterChange={handleFilterChange} />
 
