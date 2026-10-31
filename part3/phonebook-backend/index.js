@@ -18,6 +18,9 @@ app.use(
   )
 )
 
+// 3.11: serve the frontend build (the dist folder) as static files
+app.use(express.static('dist'))
+
 // The data lives in memory: it is reset every time the server restarts
 let persons = [
   {
