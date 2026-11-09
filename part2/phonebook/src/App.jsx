@@ -45,6 +45,11 @@ const App = () => {
     setFilter(event.target.value)
   }
 
+  // Gets the error message that the backend sent (for example a validation error)
+  const getErrorMessage = (error) => {
+    return error.response?.data?.error || 'Something went wrong'
+  }
+
   // Runs when the form is submitted (the "add" button)
   const addPerson = (event) => {
     event.preventDefault() // stop the page from reloading
@@ -72,13 +77,18 @@ const App = () => {
             setNewNumber('')
             showNotification(`Changed the number of ${returnedPerson.name}`, 'success')
           })
-          .catch(() => {
-            // 2.17: the person was already deleted from the server
-            showNotification(
-              `Information of ${existingPerson.name} has already been removed from server`,
-              'error'
-            )
-            setPersons(persons.filter((p) => p.id !== existingPerson.id))
+          .catch((error) => {
+            if (error.response && error.response.status === 404) {
+              // The person was already deleted from the server
+              showNotification(
+                `Information of ${existingPerson.name} has already been removed from server`,
+                'error'
+              )
+              setPersons(persons.filter((p) => p.id !== existingPerson.id))
+            } else {
+              // For example a validation error: show the message from the backend
+              showNotification(getErrorMessage(error), 'error')
+            }
           })
       }
       return
@@ -90,12 +100,18 @@ const App = () => {
       number: newNumber
     }
 
-    personService.create(personObject).then((returnedPerson) => {
-      setPersons(persons.concat(returnedPerson))
-      setNewName('') // clear the input fields
-      setNewNumber('')
-      showNotification(`Added ${returnedPerson.name}`, 'success')
-    })
+    personService
+      .create(personObject)
+      .then((returnedPerson) => {
+        setPersons(persons.concat(returnedPerson))
+        setNewName('') // clear the input fields
+        setNewNumber('')
+        showNotification(`Added ${returnedPerson.name}`, 'success')
+      })
+      .catch((error) => {
+        // 3.19 / 3.20: show the validation message sent by the backend
+        showNotification(getErrorMessage(error), 'error')
+      })
   }
 
   // Delete a person after asking for confirmation
@@ -108,7 +124,6 @@ const App = () => {
           showNotification(`Deleted ${person.name}`, 'success')
         })
         .catch(() => {
-          // The person was already deleted from the server
           showNotification(
             `Information of ${person.name} has already been removed from server`,
             'error'

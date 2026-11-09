@@ -114,13 +114,18 @@ const unknownEndpoint = (request, response) => {
 
 app.use(unknownEndpoint)
 
-// 3.16: the error handler middleware (it must be the LAST middleware)
+// The error handler middleware (it must be the LAST middleware)
 const errorHandler = (error, request, response, next) => {
   console.error(error.message)
 
   // CastError means that the id has an invalid format
   if (error.name === 'CastError') {
     return response.status(400).send({ error: 'malformatted id' })
+  }
+
+  // ValidationError means that the data broke the rules of the model
+  if (error.name === 'ValidationError') {
+    return response.status(400).json({ error: error.message })
   }
 
   // Any other error goes to Express' default handler
