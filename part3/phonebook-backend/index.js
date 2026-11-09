@@ -23,49 +23,51 @@ app.use(
 // Serve the frontend build (the dist folder) as static files
 app.use(express.static('dist'))
 
-// Old in-memory data: it is only used by the routes that we have
-// not moved to the database yet (info, get one person, delete)
-let persons = [
-  { id: '1', name: 'Arto Hellas', number: '040-123456' },
-  { id: '2', name: 'Ada Lovelace', number: '39-44-5323523' },
-  { id: '3', name: 'Dan Abramov', number: '12-43-234345' },
-  { id: '4', name: 'Mary Poppendieck', number: '39-23-6423122' }
-]
-
-// 3.13: get ALL the people from the database
-app.get('/api/persons', (request, response) => {
-  Person.find({}).then((people) => {
-    response.json(people)
-  })
+// Get ALL the people from the database
+app.get('/api/persons', (request, response, next) => {
+  Person.find({})
+    .then((people) => {
+      response.json(people)
+    })
+    .catch((error) => next(error))
 })
 
-app.get('/info', (request, response) => {
-  response.send(
-    `<p>Phonebook has info for ${persons.length} people</p>
-     <p>${new Date()}</p>`
-  )
+// 3.18: info page, now using the database to count the entries
+app.get('/info', (request, response, next) => {
+  Person.countDocuments({})
+    .then((count) => {
+      response.send(
+        `<p>Phonebook has info for ${count} people</p>
+         <p>${new Date()}</p>`
+      )
+    })
+    .catch((error) => next(error))
 })
 
-app.get('/api/persons/:id', (request, response) => {
-  const id = request.params.id
-  const person = persons.find((person) => person.id === id)
-
-  if (person) {
-    response.json(person)
-  } else {
-    response.status(404).end()
-  }
+// 3.18: get ONE person from the database
+app.get('/api/persons/:id', (request, response, next) => {
+  Person.findById(request.params.id)
+    .then((person) => {
+      if (person) {
+        response.json(person)
+      } else {
+        response.status(404).end() // no person with that id
+      }
+    })
+    .catch((error) => next(error))
 })
 
-app.delete('/api/persons/:id', (request, response) => {
-  const id = request.params.id
-  persons = persons.filter((person) => person.id !== id)
-
-  response.status(204).end()
+// 3.15: delete ONE person from the database
+app.delete('/api/persons/:id', (request, response, next) => {
+  Person.findByIdAndDelete(request.params.id)
+    .then(() => {
+      response.status(204).end()
+    })
+    .catch((error) => next(error))
 })
 
-// 3.14: save a NEW person in the database
-app.post('/api/persons', (request, response) => {
+// Save a NEW person in the database
+app.post('/api/persons', (request, response, next) => {
   const body = request.body
 
   if (!body.name || !body.number) {
@@ -77,17 +79,55 @@ app.post('/api/persons', (request, response) => {
     number: body.number
   })
 
-  person.save().then((savedPerson) => {
-    response.json(savedPerson)
-  })
+  person
+    .save()
+    .then((savedPerson) => {
+      response.json(savedPerson)
+    })
+    .catch((error) => next(error))
 })
 
-// Middleware for routes that do not exist (it must go AFTER all the routes)
+// 3.17: change the number of an existing person
+app.put('/api/persons/:id', (request, response, next) => {
+  const { name, number } = request.body
+
+  Person.findById(request.params.id)
+    .then((person) => {
+      if (!person) {
+        return response.status(404).end() // the person does not exist (anymore)
+      }
+
+      person.name = name
+      person.number = number
+
+      return person.save().then((updatedPerson) => {
+        response.json(updatedPerson)
+      })
+    })
+    .catch((error) => next(error))
+})
+
+// Middleware for routes that do not exist
 const unknownEndpoint = (request, response) => {
   response.status(404).send({ error: 'unknown endpoint' })
 }
 
 app.use(unknownEndpoint)
+
+// 3.16: the error handler middleware (it must be the LAST middleware)
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message)
+
+  // CastError means that the id has an invalid format
+  if (error.name === 'CastError') {
+    return response.status(400).send({ error: 'malformatted id' })
+  }
+
+  // Any other error goes to Express' default handler
+  next(error)
+}
+
+app.use(errorHandler)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
