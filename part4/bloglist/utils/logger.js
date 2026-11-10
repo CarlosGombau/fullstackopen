@@ -1,5 +1,8 @@
+// During the tests we don't want the info messages in the console
 const info = (...params) => {
-  console.log(...params)
+  if (process.env.NODE_ENV !== 'test') {
+    console.log(...params)
+  }
 }
 
 const error = (...params) => {
