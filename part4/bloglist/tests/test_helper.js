@@ -45,4 +45,16 @@ const blogsInDb = async () => {
   return blogs.map((blog) => blog.toJSON())
 }
 
-module.exports = { initialBlogs, blogsInDb }
+// An id that has a valid format but does not belong to any blog
+const nonExistingId = async () => {
+  const blog = new Blog({
+    title: 'will remove soon',
+    url: 'https://example.com/remove'
+  })
+  await blog.save()
+  await blog.deleteOne()
+
+  return blog._id.toString()
+}
+
+module.exports = { initialBlogs, blogsInDb, nonExistingId }
