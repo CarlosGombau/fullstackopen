@@ -12,11 +12,15 @@ const blogSchema = new mongoose.Schema({
   },
   likes: {
     type: Number,
-    default: 0 // 4.11: if likes is missing, it is 0
+    default: 0
+  },
+  // The user who created the blog
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }
 })
 
-// 4.9: show "id" (a string) instead of MongoDB's "_id" and "__v"
 blogSchema.set('toJSON', {
   transform: (document, returnedObject) => {
     returnedObject.id = returnedObject._id.toString()

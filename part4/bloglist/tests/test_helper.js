@@ -1,4 +1,8 @@
+const bcrypt = require('bcryptjs')
+const jwt = require('jsonwebtoken')
+const config = require('../utils/config')
 const Blog = require('../models/blog')
+const User = require('../models/user')
 
 const initialBlogs = [
   {
@@ -45,6 +49,12 @@ const blogsInDb = async () => {
   return blogs.map((blog) => blog.toJSON())
 }
 
+// All the users that are in the database right now
+const usersInDb = async () => {
+  const users = await User.find({})
+  return users.map((user) => user.toJSON())
+}
+
 // An id that has a valid format but does not belong to any blog
 const nonExistingId = async () => {
   const blog = new Blog({
@@ -57,4 +67,23 @@ const nonExistingId = async () => {
   return blog._id.toString()
 }
 
-module.exports = { initialBlogs, blogsInDb, nonExistingId }
+// Creates a user in the test database (a cheap hash is enough for the tests)
+const createUser = async (username, password = 'sekret') => {
+  const passwordHash = await bcrypt.hash(password, 4)
+  const user = new User({ username, name: `${username} name`, passwordHash })
+  return user.save()
+}
+
+// A valid token for a user
+const tokenFor = (user) => {
+  return jwt.sign({ username: user.username, id: user._id }, config.SECRET)
+}
+
+module.exports = {
+  initialBlogs,
+  blogsInDb,
+  usersInDb,
+  nonExistingId,
+  createUser,
+  tokenFor
+}

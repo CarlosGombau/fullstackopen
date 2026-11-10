@@ -1,44 +1,71 @@
 const blogsRouter = require('express').Router()
 const Blog = require('../models/blog')
+const { userExtractor } = require('../utils/middleware')
 
-// The paths are relative to /api/blogs (set in app.js)
+// Listing the blogs does NOT need a token. 4.17: show the creator of each blog
 blogsRouter.get('/', async (request, response) => {
-  const blogs = await Blog.find({})
+  const blogs = await Blog.find({}).populate('user', { username: 1, name: 1 })
   response.json(blogs)
 })
 
-blogsRouter.post('/', async (request, response) => {
-  const blog = new Blog(request.body)
+// 4.19 / 4.22: only with a valid token. The user of the token is the creator
+blogsRouter.post('/', userExtractor, async (request, response) => {
+  const { title, author, url, likes } = request.body
+  const user = request.user
 
-  // If title or url are missing, save() throws a ValidationError
-  // and the error handler middleware answers with 400
+  const blog = new Blog({ title, author, url, likes, user: user._id })
+
+  // If title or url are missing, save() throws a ValidationError (400)
   const savedBlog = await blog.save()
+
+  // Add the blog to the list of blogs of the user
+  user.blogs = user.blogs.concat(savedBlog._id)
+  await user.save()
+
   response.status(201).json(savedBlog)
 })
 
-// 4.13: delete ONE blog (RESTful: DELETE /api/blogs/:id)
-blogsRouter.delete('/:id', async (request, response) => {
-  await Blog.findByIdAndDelete(request.params.id)
-  response.status(204).end() // 204 = done, nothing to send back
+// 4.21: only the creator of the blog can delete it
+blogsRouter.delete('/:id', userExtractor, async (request, response) => {
+  const user = request.user
+  const blog = await Blog.findById(request.params.id)
+
+  // The blog does not exist (anymore): the result is the same, 204
+  if (!blog) {
+    return response.status(204).end()
+  }
+
+  // blog.user is an object, so we convert both ids to strings to compare them
+  if (!blog.user || blog.user.toString() !== user._id.toString()) {
+    return response
+      .status(403)
+      .json({ error: 'only the creator can delete a blog' })
+  }
+
+  await blog.deleteOne()
+
+  user.blogs = user.blogs.filter((id) => id.toString() !== blog._id.toString())
+  await user.save()
+
+  response.status(204).end()
 })
 
-// 4.14: update ONE blog, mostly to change its likes (PUT /api/blogs/:id)
+// Update a blog (mostly its likes)
 blogsRouter.put('/:id', async (request, response) => {
   const { title, author, url, likes } = request.body
 
   const blog = await Blog.findById(request.params.id)
 
   if (!blog) {
-    return response.status(404).end() // there is no blog with that id
+    return response.status(404).end()
   }
 
-  // Only change the fields that were sent in the request
   if (title !== undefined) blog.title = title
   if (author !== undefined) blog.author = author
   if (url !== undefined) blog.url = url
   if (likes !== undefined) blog.likes = likes
 
-  const updatedBlog = await blog.save() // save() also runs the validation
+  const updatedBlog = await blog.save()
   response.json(updatedBlog)
 })
 
