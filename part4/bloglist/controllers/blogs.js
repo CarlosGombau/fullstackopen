@@ -2,13 +2,13 @@ const blogsRouter = require('express').Router()
 const Blog = require('../models/blog')
 const { userExtractor } = require('../utils/middleware')
 
-// Listing the blogs does NOT need a token. 4.17: show the creator of each blog
+// Listing the blogs does NOT need a token. Show the creator of each blog
 blogsRouter.get('/', async (request, response) => {
   const blogs = await Blog.find({}).populate('user', { username: 1, name: 1 })
   response.json(blogs)
 })
 
-// 4.19 / 4.22: only with a valid token. The user of the token is the creator
+// Only with a valid token. The user of the token is the creator
 blogsRouter.post('/', userExtractor, async (request, response) => {
   const { title, author, url, likes } = request.body
   const user = request.user
@@ -22,10 +22,13 @@ blogsRouter.post('/', userExtractor, async (request, response) => {
   user.blogs = user.blogs.concat(savedBlog._id)
   await user.save()
 
+  // 5.9: send the data of the creator (username and name), not only its id
+  await savedBlog.populate('user', { username: 1, name: 1 })
+
   response.status(201).json(savedBlog)
 })
 
-// 4.21: only the creator of the blog can delete it
+// Only the creator of the blog can delete it
 blogsRouter.delete('/:id', userExtractor, async (request, response) => {
   const user = request.user
   const blog = await Blog.findById(request.params.id)
@@ -50,7 +53,8 @@ blogsRouter.delete('/:id', userExtractor, async (request, response) => {
   response.status(204).end()
 })
 
-// Update a blog (mostly its likes)
+// Update a blog (mostly its likes).
+// The "user" field of the request is ignored: the creator of a blog never changes
 blogsRouter.put('/:id', async (request, response) => {
   const { title, author, url, likes } = request.body
 
@@ -66,6 +70,10 @@ blogsRouter.put('/:id', async (request, response) => {
   if (likes !== undefined) blog.likes = likes
 
   const updatedBlog = await blog.save()
+
+  // 5.9: send the data of the creator, not only its id
+  await updatedBlog.populate('user', { username: 1, name: 1 })
+
   response.json(updatedBlog)
 })
 

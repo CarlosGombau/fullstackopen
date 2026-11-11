@@ -13,8 +13,8 @@ const Blog = ({ blog, handleLike, handleDelete, showDelete }) => {
   }
 
   return (
-    <div style={blogStyle}>
-      <div>
+    <div style={blogStyle} className="blog">
+      <div className="blog-summary">
         {blog.title} {blog.author}{' '}
         <button onClick={() => setDetailsVisible(!detailsVisible)}>
           {detailsVisible ? 'hide' : 'view'}
@@ -22,7 +22,7 @@ const Blog = ({ blog, handleLike, handleDelete, showDelete }) => {
       </div>
 
       {detailsVisible && (
-        <div>
+        <div className="blog-details">
           <div>{blog.url}</div>
           <div>
             likes {blog.likes}{' '}
@@ -30,7 +30,7 @@ const Blog = ({ blog, handleLike, handleDelete, showDelete }) => {
           </div>
           {/* Old blogs (from before the users existed) have no user */}
           <div>{blog.user && blog.user.name}</div>
-          {/* 5.11: only the creator of the blog sees this button */}
+          {/* Only the creator of the blog sees this button */}
           {showDelete && (
             <button onClick={() => handleDelete(blog)}>remove</button>
           )}

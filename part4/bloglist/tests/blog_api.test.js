@@ -85,10 +85,10 @@ describe('adding a new blog', () => {
       .send(newBlog)
       .expect(201)
 
-    assert.strictEqual(response.body.user, user._id.toString())
-
+    assert.strictEqual(response.body.user.id, user._id.toString())
+    
     // The blog also appears in the list of blogs of the user
-    const userAtEnd = await User.findById(user._id)
+    const userAtEnd = await UseSr.findById(user._id)
     const blogIds = userAtEnd.blogs.map((id) => id.toString())
     assert.ok(blogIds.includes(response.body.id))
   })
