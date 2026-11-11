@@ -1,29 +1,31 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 import Blog from './components/Blog'
-import LoginForm from './components/LoginForm'
 import BlogForm from './components/BlogForm'
+import LoginForm from './components/LoginForm'
 import Notification from './components/Notification'
+import Togglable from './components/Togglable'
 import blogService from './services/blogs'
 import loginService from './services/login'
 
 const App = () => {
   const [blogs, setBlogs] = useState([])
 
-  // null = nobody is logged in, otherwise { token, username, name }
-  const [user, setUser] = useState(null)
+  // The user starts as the one saved in the local storage (or null)
+  const [user, setUser] = useState(() => {
+    const loggedUserJSON = window.localStorage.getItem('loggedBlogappUser')
+    return loggedUserJSON ? JSON.parse(loggedUserJSON) : null
+  })
 
   // The fields of the login form
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
 
-  // The fields of the new blog form
-  const [title, setTitle] = useState('')
-  const [author, setAuthor] = useState('')
-  const [url, setUrl] = useState('')
-
   // null = no message, otherwise { text: '...', type: 'success' or 'error' }
   const [notification, setNotification] = useState(null)
+
+  // A reference to the Togglable that contains the form to create blogs
+  const blogFormRef = useRef()
 
   // Fetch the blogs once, when the app starts
   useEffect(() => {
@@ -35,18 +37,12 @@ const App = () => {
     fetchBlogs()
   }, [])
 
-  // 5.2: when the app starts, check if a user was saved in the local storage
+  // Keep the token of the blog service in sync with the logged-in user
   useEffect(() => {
-    const loggedUserJSON = window.localStorage.getItem('loggedBlogappUser')
+    blogService.setToken(user ? user.token : null)
+  }, [user])
 
-    if (loggedUserJSON) {
-      const savedUser = JSON.parse(loggedUserJSON)
-      setUser(savedUser)
-      blogService.setToken(savedUser.token)
-    }
-  }, [])
-
-  // 5.4: shows a message for 5 seconds
+  // Shows a message for 5 seconds
   const showNotification = (text, type) => {
     setNotification({ text, type })
     setTimeout(() => {
@@ -54,20 +50,18 @@ const App = () => {
     }, 5000)
   }
 
-  // 5.1: runs when the login form is submitted
   const handleLogin = async (event) => {
     event.preventDefault() // stop the page from reloading
 
     try {
       const loggedUser = await loginService.login({ username, password })
 
-      // 5.2: save the user in the browser so the login is "permanent"
+      // Save the user in the browser so the login is "permanent"
       window.localStorage.setItem(
         'loggedBlogappUser',
         JSON.stringify(loggedUser)
       )
 
-      blogService.setToken(loggedUser.token)
       setUser(loggedUser)
       setUsername('')
       setPassword('')
@@ -76,33 +70,69 @@ const App = () => {
     }
   }
 
-  // 5.2: log out
   const handleLogout = () => {
     // Remove the saved user so the browser does not remember it
     window.localStorage.removeItem('loggedBlogappUser')
-    blogService.setToken(null)
     setUser(null)
   }
 
-  // 5.3: create a new blog
-  const addBlog = async (event) => {
-    event.preventDefault()
-
+  // Create a new blog. It returns true if it worked and false if it did not
+  const addBlog = async (blogObject) => {
     try {
-      const createdBlog = await blogService.create({ title, author, url })
+      const createdBlog = await blogService.create(blogObject)
 
-      setBlogs(blogs.concat(createdBlog))
-      setTitle('')
-      setAuthor('')
-      setUrl('')
+      // Close the form
+      blogFormRef.current.toggleVisibility()
+
+      setBlogs((current) => current.concat(createdBlog))
       showNotification(
         `a new blog ${createdBlog.title} by ${createdBlog.author} added`,
         'success'
       )
+      return true
     } catch (error) {
-      // Show the message sent by the backend (for example, title missing)
       showNotification(
         error.response?.data?.error || 'could not create the blog',
+        'error'
+      )
+      return false
+    }
+  }
+
+  // 5.8: add one like to a blog
+  const handleLike = async (blog) => {
+    try {
+      // The backend replaces the blog, so we send all its fields
+      const updatedBlog = await blogService.update(blog.id, {
+        user: blog.user ? blog.user.id : undefined,
+        likes: blog.likes + 1,
+        author: blog.author,
+        title: blog.title,
+        url: blog.url
+      })
+
+      setBlogs((current) =>
+        current.map((b) => (b.id === blog.id ? updatedBlog : b))
+      )
+    } catch {
+      showNotification('could not update the likes', 'error')
+    }
+  }
+
+  // 5.11: delete a blog after asking for confirmation
+  const handleDelete = async (blog) => {
+    if (!window.confirm(`Remove blog ${blog.title} by ${blog.author}`)) {
+      return
+    }
+
+    try {
+      await blogService.remove(blog.id)
+
+      setBlogs((current) => current.filter((b) => b.id !== blog.id))
+      showNotification(`blog ${blog.title} removed`, 'success')
+    } catch (error) {
+      showNotification(
+        error.response?.data?.error || 'could not remove the blog',
         'error'
       )
     }
@@ -125,7 +155,9 @@ const App = () => {
     )
   }
 
-  // A user is logged in: show the name, the form and the list of blogs
+  // 5.10: sort the blogs by likes, from the most to the least liked
+  const sortedBlogs = [...blogs].sort((a, b) => b.likes - a.likes)
+
   return (
     <div>
       <h2>blogs</h2>
@@ -136,19 +168,19 @@ const App = () => {
         {user.name} logged in <button onClick={handleLogout}>logout</button>
       </p>
 
-      <h2>create new</h2>
-      <BlogForm
-        addBlog={addBlog}
-        title={title}
-        handleTitleChange={(event) => setTitle(event.target.value)}
-        author={author}
-        handleAuthorChange={(event) => setAuthor(event.target.value)}
-        url={url}
-        handleUrlChange={(event) => setUrl(event.target.value)}
-      />
+      {/* 5.5: the form is only shown when the button is clicked */}
+      <Togglable buttonLabel="create new blog" ref={blogFormRef}>
+        <BlogForm createBlog={addBlog} />
+      </Togglable>
 
-      {blogs.map((blog) => (
-        <Blog key={blog.id} blog={blog} />
+      {sortedBlogs.map((blog) => (
+        <Blog
+          key={blog.id}
+          blog={blog}
+          handleLike={handleLike}
+          handleDelete={handleDelete}
+          showDelete={Boolean(blog.user) && blog.user.username === user.username}
+        />
       ))}
     </div>
   )

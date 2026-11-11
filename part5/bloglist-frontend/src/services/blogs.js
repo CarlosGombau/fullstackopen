@@ -14,7 +14,7 @@ const getAll = async () => {
   return response.data
 }
 
-// Creating a blog needs the token in the Authorization header
+// Creating a blog needs the token
 const create = async (newBlog) => {
   const config = {
     headers: { Authorization: token }
@@ -24,4 +24,19 @@ const create = async (newBlog) => {
   return response.data
 }
 
-export default { getAll, create, setToken }
+// 5.8: replace the data of a blog (used to add a like)
+const update = async (id, updatedBlog) => {
+  const response = await axios.put(`${baseUrl}/${id}`, updatedBlog)
+  return response.data
+}
+
+// 5.11: delete a blog (it needs the token: only the creator can do it)
+const remove = async (id) => {
+  const config = {
+    headers: { Authorization: token }
+  }
+
+  await axios.delete(`${baseUrl}/${id}`, config)
+}
+
+export default { getAll, create, update, remove, setToken }
